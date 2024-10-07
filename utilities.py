@@ -3,11 +3,31 @@ import pandas as pd
 import torch
 
 def binning_equal_q(sorted_log10p_vector, inv_sorted_log10q_vector, counts, bins=150, writefolder=False, step=100):
+
+    '''
+    function for the binning of the sequences in a NGS dataset to compute mean and variance of the count
+    
+    - sorted_log10p_vector (torch.Tensor): the vector with the log10-probability of all possible sequences, sorted in ascending order.
+    - inv_sorted_log10q_vector (numpy.array): the vector with the log10-probability of the sequences which have zero count in the dataset, sorted in descending order.
+    - counts (numpy.array): the counts of the corresponding sequences in the inv_sorted_log10q_vector.
+    - bins (int): the number of desired bins
+    
+    returns a pandas.DataFrame with columns:
+    - edge_sx: the lowest log10-probability in the bin
+    - edge_dx: the highest log10-probability in the bin
+    - n_lambdas: the number of zero count and non-zero count sequences in the bin
+    - n_nonzeros: the number of non-zero count sequences in the bin
+    - mean_lambda: mean predicted count computed as the mean of the probability of the zero and the non-zero count sequences, multiplied by the NGS depth.
+    - var_lambda: variance of the predicted count (computed on the same quantity as the mean_lambda)
+    - mean_count: mean empirical count computed as the mean of the zero and the non-zero counts of the all sequences.
+    - var_count: variance of the empirical count (computed on the same quantity as the mean_count)
+    '''
+
     
     n_q_per_bin = len(inv_sorted_log10q_vector) // (bins)
 
-    df_bins = pd.DataFrame(columns=['edge_sx','edge_dx','n_lambdas','n_lambdas_inferred_aritm','n_lambdas_inferred_geo','n_nonzeros','mean_aritm_lambda','mean_geom_lambda','mean_lambda','var_uniform_lambda','var_lambda','mean_count','var_count'])
-    logR = np.log10(counts.sum())
+    df_bins = pd.DataFrame(columns=['edge_sx','edge_dx','n_lambdas','n_nonzeros','mean_lambda','var_lambda','mean_count','var_count'])
+    logR = np.log10(counts.sum()) #NGS counts
     
     for i in range(bins):
         print(i)
@@ -31,16 +51,11 @@ def binning_equal_q(sorted_log10p_vector, inv_sorted_log10q_vector, counts, bins
         print('elements in the bin: %d'%(n_lambdas))
         n_nonzeros = len(counts_sel)
         print('nonzeros: %d'%(n_nonzeros))
-        mean_aritm_lambda = 0.5*(lambda_sx + lambda_dx)
-        mean_geom_lambda = np.sqrt(lambda_sx * lambda_dx)
         mean_lambda = (10**(logp_sel + logR)).mean().numpy()
-        var_uniform_lambda = (lambda_dx - lambda_sx)**2 / 12
         var_lambda = (10**(logp_sel + logR)).var().numpy()
         mean_count = counts_sel.sum() / n_lambdas
         var_count = (counts_sel**2).sum() / n_lambdas - mean_count**2
-        n_lambdas_inferred_aritm = counts_sel.sum() / mean_aritm_lambda
-        n_lambdas_inferred_geo = counts_sel.sum() / mean_geom_lambda
-        df_bins.loc[i] = [edge_sx,edge_dx,n_lambdas,n_lambdas_inferred_aritm,n_lambdas_inferred_geo,n_nonzeros,mean_aritm_lambda,mean_geom_lambda,mean_lambda,var_uniform_lambda,var_lambda,mean_count,var_count]
+        df_bins.loc[i] = [edge_sx,edge_dx,n_lambdas,n_nonzeros,mean_lambda,var_lambda,mean_count,var_count]
         
         if writefolder and i%step==0:
             count, frequencies = np.unique(counts_sel, return_counts=True)
